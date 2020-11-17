@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30621.155
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FeiertagAppV0.2.0", "FeiertagAppV0.2.0.csproj", "{A35B9322-0FD8-4359-82B5-91D40900440B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A35B9322-0FD8-4359-82B5-91D40900440B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A35B9322-0FD8-4359-82B5-91D40900440B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A35B9322-0FD8-4359-82B5-91D40900440B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A35B9322-0FD8-4359-82B5-91D40900440B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {2DC4EACB-BF84-45A5-9DE3-B60003B35D45}
+	EndGlobalSection
+EndGlobal
