@@ -1,6 +1,5 @@
 ﻿using NLog;
 using System;
-using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -8,8 +7,6 @@ using System.Collections.Generic;
 using Microsoft.Graph;
 using Microsoft.Graph.Auth;
 using Microsoft.Identity.Client;
-using System.Text.Json;
-using System.Text;
 
 public static class Functions
 {
@@ -62,24 +59,19 @@ public static class Functions
                     FeiertageAusCsv.Add(tempFeiertag);
                 }
             }
+            l.Info("--> load from csv successfully!...");
             return FeiertageAusCsv;
-        }
-        catch (FileNotFoundException e)
-        {
-            l.Error("!-- EXIT --! at ReadCSV with FileNotFoundException: " + e);
-            Environment.Exit(-1);
-            return null;
         }
         catch (Exception e)
         {
-            l.Error("!-- EXIT --! at ReadCSV with other Exception: " + e);
+            l.Error("!-- FAILED --! at ReadCSV with Exception: " + e);
             Environment.Exit(-1);
             return null;
         }
     }
 
     public static GraphServiceClient Authentication()
-    //handles authentication.
+    //handles authentication and returns GraphServiceClient as 'gc'.
     {
         //should come from web.config
         string tenantId = "56860889-26c2-4d92-8d55-70bc87be7fd8";
@@ -103,25 +95,34 @@ public static class Functions
  ----------------------------------------------------------------------------------------------------------------------*/
 
         //build confidential client app - this is needed for MSAL.NET to gain authentication
-        IConfidentialClientApplication app = ConfidentialClientApplicationBuilder.Create(clientId)
+        try
+        {
+            IConfidentialClientApplication app = ConfidentialClientApplicationBuilder.Create(clientId)
                                                                                  .WithClientSecret(clientSecret)
                                                                                  .WithTenantId(tenantId)
                                                                                  //.WithHttpClientFactory(hcf)
                                                                                  .Build();
 
-        //create an AuthProvider from Application. This is used by GraphServiceClient
-        ClientCredentialProvider authProvider = new ClientCredentialProvider(app);
-        GraphServiceClient gc = new GraphServiceClient(authProvider/*, httpProvider*/);
+            //create an AuthProvider from Application. This is used by GraphServiceClient
+            ClientCredentialProvider authProvider = new ClientCredentialProvider(app);
+            GraphServiceClient gc = new GraphServiceClient(authProvider/*, httpProvider*/);
 
-        return gc;
+            l.Info("--> build GraphServiceClient successfully!...");
+            return gc;
+        }
+        catch (Exception e)
+        {
+            l.Error("!-- FAILED --! at Authentication with Exception: " + e);
+            Environment.Exit(-2);
+            return null;
+        }
     }
 
-
     public static async Task<List<Feiertag>> GetUserEvents(GraphServiceClient gc, string userId, string today)
+    //get all future Events from User via GraphAPI
     {
         //creat list to store pages from response
         List<IUserCalendarViewCollectionPage> pages = new List<IUserCalendarViewCollectionPage>();
-
 
         //set the timeframe for Events wich are going to be called.
         var queryOptions = new List<QueryOption>()
@@ -130,109 +131,148 @@ public static class Functions
             new QueryOption("endDateTime", "2023-12-30T00:00:00.00")
         };
 
-        //build Request to get existing events from users calender.
-        var response = await gc.Users[$"{userId}"].CalendarView
-                                                  .Request(queryOptions)
-                                                  .Select("subject,start,end")
-                                                  .GetAsync();
 
-        /*var response = await gc.Users[$"{userId}"].Events
-                                                 .Request()
-                                                 .Header("Prefer", "outlook.timezone=\"W. Europe Standard Time\"")
-                                                 .Select("subject,start,end")
-                                                 .GetAsync();*/
-
-        //request next page until all events are loaded
-        pages.Add(response);
-        while (response.NextPageRequest != null)
+        try
         {
-            response = await response.NextPageRequest
-                                     .GetAsync();
+            //build Request to get existing events from users calender.
+            var response = await gc.Users[$"{userId}"].CalendarView
+                                                      .Request(queryOptions)
+                                                      .Select("subject,start,end")
+                                                      .GetAsync();
 
+            /*var response = await gc.Users[$"{userId}"].Events
+                                                     .Request()
+                                                     .Header("Prefer", "outlook.timezone=\"W. Europe Standard Time\"")
+                                                     .Select("subject,start,end")
+                                                     .GetAsync();*/
+
+            //request next page until all events are loaded
             pages.Add(response);
-        } // ---------------------------------------------------------------------------!!!!!!! vereinfachen
-        
-        //create list to store events in easy format.
-        List<Feiertag> allEvents = new List<Feiertag>();
-        
-        //add events from pages to list
-        foreach (IUserCalendarViewCollectionPage page in pages)
-        {
-            foreach (Event event_ in page.CurrentPage)
+            while (response.NextPageRequest != null)
             {
-                Feiertag tempEvent = new Feiertag
-                {
-                    Subject = event_.Subject,
-                    StartDatetime = event_.Start.DateTime.ToString(),
-                    EndDateTime = event_.End.DateTime.ToString()
-                };
-                allEvents.Add(tempEvent);
-            }
-        }
+                response = await response.NextPageRequest
+                                         .GetAsync();
 
-        return allEvents;
+                pages.Add(response);
+            } // ---------------------------------------------------------------------------!!!!!!! vereinfachen
+
+            //create list to store events in easy format.
+            List<Feiertag> allEvents = new List<Feiertag>();
+
+            //add events from pages to list
+            foreach (IUserCalendarViewCollectionPage page in pages)
+            {
+                foreach (Event event_ in page.CurrentPage)
+                {
+                    Feiertag tempEvent = new Feiertag
+                    {
+                        Subject = event_.Subject,
+                        StartDatetime = event_.Start.DateTime.ToString(),
+                        EndDateTime = event_.End.DateTime.ToString()
+                    };
+                    allEvents.Add(tempEvent);
+                }
+            }
+            l.Info($"--> load {allEvents.Count} existing Events from User successfully!...");
+            return allEvents;
+        }
+        catch (Exception e)
+        {
+            l.Error("!-- FAILED --! at GetUserEvents with Exception: " + e);
+            Environment.Exit(-3);
+            return null;
+        }
     }
 
     public static bool Compare(Feiertag feiertagCsv, List<Feiertag> feiertageUser)
     //compares subject and startDateTime of current event with all existing events from user. 
     {
-        Boolean existing = false;
-        foreach (Feiertag feiertag in feiertageUser)
+        try
         {
-            if (feiertagCsv.Subject == feiertag.Subject && Convert.ToDateTime(feiertagCsv.StartDatetime) == Convert.ToDateTime(feiertag.StartDatetime))
-                {
-                 existing = true;
-                 break;
-                }
-            else 
+            Boolean existing = false;
+            foreach (Feiertag feiertag in feiertageUser)
             {
-                existing = false; 
+                if (feiertagCsv.Subject == feiertag.Subject && Convert.ToDateTime(feiertagCsv.StartDatetime) == Convert.ToDateTime(feiertag.StartDatetime))
+                {
+                    existing = true;
+                    break;
+                }
+                else
+                {
+                    existing = false;
+                }
             }
+            return existing;
         }
-        return existing;
+        catch (Exception e)
+        {
+            l.Error("!-- FAILED --! at Compare with Exception: " + e);
+            Environment.Exit(-4);
+            return true;
+        }
     }
 
     public static Event FormatEvent(Feiertag feiertag)
     //format data to JSON (needed for postEventAsync)
     {
-        var @event = new Event
+        try
         {
-            ReminderMinutesBeforeStart = 900,
-            IsAllDay = true,
-            ShowAs = FreeBusyStatus.Oof,
-            Categories = new List<string> { "Feiertag" },
-            Subject = feiertag.Subject,
-            Start = new DateTimeTimeZone
+            var @event = new Event
             {
-                DateTime = feiertag.StartDatetime,
-                TimeZone = "W. Europe Standard Time"
-            },
-            End = new DateTimeTimeZone
-            {
-                DateTime = feiertag.EndDateTime,
-                TimeZone = "W. Europe Standard Time"
-            },
-            Location = new Location
-            {
-                DisplayName = "Österreich"
-            }
-        };
-        return @event;
+                ReminderMinutesBeforeStart = 900,
+                IsAllDay = true,
+                ShowAs = FreeBusyStatus.Oof,
+                Categories = new List<string> { "Feiertag" },
+                Subject = feiertag.Subject,
+                Start = new DateTimeTimeZone
+                {
+                    DateTime = feiertag.StartDatetime,
+                    TimeZone = "W. Europe Standard Time"
+                },
+                End = new DateTimeTimeZone
+                {
+                    DateTime = feiertag.EndDateTime,
+                    TimeZone = "W. Europe Standard Time"
+                },
+                Location = new Location
+                {
+                    DisplayName = "Österreich"
+                }
+            };
+            return @event;
+        }
+        catch (Exception e)
+        {
+            l.Error("!-- FAILED --! at FormatEvent with Exception: " + e);
+            Environment.Exit(-5);
+            return null;
+        }
     }
 
     public static HttpRequestMessage BuildHttpMessage(GraphServiceClient gc, string userId, Event @event)
     //post Event async with Graph Service Client.
     {
-        var ser = new Serializer();
+        try 
+        {
+            var ser = new Serializer();
 
-        var t = gc.Users[$"{userId}"].Events
-                           .Request()
-                           .GetHttpRequestMessage();
+            var t = gc.Users[$"{userId}"].Events
+                               .Request()
+                               .GetHttpRequestMessage();
 
-        t.Method = HttpMethod.Post;
-        t.Content = ser.SerializeAsJsonContent(@event);
-        t.Headers.Add("Prefer", "outlook.timezone=\"W. Europe Standard Time\"");
-    
-        return t;
+            t.Method = HttpMethod.Post;
+            t.Content = ser.SerializeAsJsonContent(@event);
+            t.Headers.Add("Prefer", "outlook.timezone=\"W. Europe Standard Time\"");
+
+            return t;
+        }
+
+        catch (Exception e)
+        {
+            l.Error("!-- FAILED --! at BuildHttpMessage with Exception: " + e);
+            Environment.Exit(-6);
+            return null;
+        }
     }
+
 }
