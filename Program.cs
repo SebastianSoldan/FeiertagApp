@@ -75,13 +75,14 @@ namespace FeiertagAppV0._2._0
                             batch.AddBatchRequestStep(new BatchRequestStep(batchId.ToString(), Functions.BuildHttpMessage(gc, userId, @event), new List<string> { (batchId - 1).ToString() }));
                             var task1 = gc.Batch.Request().PostAsync(batch);
                             task1.Wait();
-                            int j = 20;
+                            l.Info($"Batch {numbersOfBatches - 1} posted...");
+                            int j = 20; //loop for remove allready postet BatchRequestSteps.
                             while (batch.BatchRequestSteps.Count > 0)
                             {
                                 batch.RemoveBatchRequestStepWithId(j.ToString());
                                 j--;
                             }
-                            batchId = 0;
+                            batchId = 0; //reset batchId for next round.
                         }
                     }
                 }
@@ -91,6 +92,7 @@ namespace FeiertagAppV0._2._0
                     numbersOfBatches++;
                     var task = gc.Batch.Request().PostAsync(batch);
                     task.Wait();
+                    l.Info($"Batch {numbersOfBatches - 1} posted...");
                 }
 
                 //info message
